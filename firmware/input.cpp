@@ -90,12 +90,12 @@ InputEvent inputPoll() {
 
   // Update touch buttons (edge detection only)
   if (updateButton(touchPrev)) return InputEvent::Prev;
-  if (updateButton(touchNext)) return InputEvent::Next;
   if (updateButton(touchPlay)) return InputEvent::PlayPause;
+  if (updateButton(touchNext)) return InputEvent::Next;
 
   // Update mechanical volume buttons with repeat
-  bool volUpPressed = updateButton(btnVolUp);
-  bool volDownPressed = updateButton(btnVolDown);
+  bool volDownPressed = updateButton(btnVolDown); // left = volume down
+  bool volUpPressed = updateButton(btnVolUp);     // right = volume up
 
   bool bothPressed = btnVolUp.stablePressed && btnVolDown.stablePressed;
   if (bothPressed) {

@@ -4,6 +4,7 @@
 #include <Adafruit_GC9A01A.h>
 #include <SPI.h>
 #include <math.h>
+#include "vinyl_ui.h"
 
 static Adafruit_GC9A01A display = Adafruit_GC9A01A(PIN_SCREEN_CS, PIN_SCREEN_DC, PIN_SCREEN_MOSI, PIN_SCREEN_SCK, PIN_SCREEN_RST);
 
@@ -13,6 +14,7 @@ struct UIStateCache {
   BatteryStatus battery{};
   UIMode mode = UIMode::DFP;
   uint16_t minuteTick = 0;
+  ClockTime clock{};
 };
 
 static UIStateCache uiCache;
@@ -26,12 +28,18 @@ static bool volumeOverlayActive = false;
 static float overlayVolumeLerp = DEFAULT_VOLUME;
 static uint8_t btAnimPhase = 0;
 static unsigned long lastBtAnim = 0;
+static unsigned long lastVinylStep = 0;
+static uint16_t vinylAngle = 0;
+static bool overlayPendingClear = false;
+static bool hudNeedsRestore = false;
 
-static void formatTime(char *buf, size_t len, unsigned long now) {
-  unsigned long totalMinutes = (now / 60000UL) % (24UL * 60UL);
-  uint8_t hours = totalMinutes / 60;
-  uint8_t minutes = totalMinutes % 60;
-  snprintf(buf, len, "%02u:%02u", hours, minutes);
+static void formatTime(char *buf, size_t len, const ClockTime &clock) {
+  uint8_t hours = clock.hour % 24;
+  uint8_t minutes = clock.minute % 60;
+  bool pm = hours >= 12;
+  uint8_t displayHour = hours % 12;
+  if (displayHour == 0) displayHour = 12;
+  snprintf(buf, len, "%02u:%02u %s", displayHour, minutes, pm ? "PM" : "AM");
 }
 
 static void drawSafeGridLineV(int16_t x) {
@@ -54,6 +62,7 @@ static void drawSafeGridLineH(int16_t y) {
 
 static void drawBackground() {
   display.fillScreen(COLOR_BG);
+  display.drawRGBBitmap(0, 0, vinyl_ui_bitmap, VINYL_UI_WIDTH, VINYL_UI_HEIGHT);
   display.drawCircle(CENTER_X, CENTER_Y, UI_SAFE_RADIUS, COLOR_DARK);
   display.drawCircle(CENTER_X, CENTER_Y, UI_SAFE_RADIUS - 2, COLOR_PANEL);
 
@@ -66,6 +75,21 @@ static void drawBackground() {
 
   for (uint16_t r = 18; r < UI_SAFE_RADIUS; r += 24) {
     display.drawCircle(CENTER_X, CENTER_Y, r, COLOR_DARK);
+  }
+}
+
+static void blitVinylRegion(int16_t x, int16_t y, int16_t w, int16_t h) {
+  uint16_t lineBuf[UI_SAFE_DIAMETER];
+  int16_t x0 = max<int16_t>(0, x);
+  int16_t y0 = max<int16_t>(0, y);
+  int16_t x1 = min<int16_t>(VINYL_UI_WIDTH, x + w);
+  int16_t y1 = min<int16_t>(VINYL_UI_HEIGHT, y + h);
+  for (int16_t row = y0; row < y1; ++row) {
+    int idx = row * VINYL_UI_WIDTH + x0;
+    for (int16_t col = x0; col < x1; ++col) {
+      lineBuf[col - x0] = pgm_read_word(&vinyl_ui_bitmap[idx++]);
+    }
+    display.drawRGBBitmap(x0, row, lineBuf, x1 - x0, 1);
   }
 }
 
@@ -93,7 +117,7 @@ static void drawTopBar(const BatteryStatus &bat, const char *timeStr, bool warn)
   }
 
   display.setTextColor(COLOR_ACCENT, fill);
-  int16_t timeX = x + w - 38;
+  int16_t timeX = x + w - 64;
   display.setCursor(timeX, y + 6);
   display.print(timeStr);
 }
@@ -204,6 +228,27 @@ static void drawMessagePanel(const char *timeStr) {
   display.print(timeStr);
 }
 
+static void drawVinylSpinner(bool spinning) {
+  const int16_t size = 140;
+  const int16_t x = CENTER_X - size / 2;
+  const int16_t y = CENTER_Y - size / 2;
+  blitVinylRegion(x - 2, y - 2, size + 4, size + 4);
+  if (!spinning) return;
+
+  uint16_t rOuter = size / 2 - 6;
+  uint16_t rInner = 26;
+  for (uint8_t i = 0; i < 6; ++i) {
+    float a = (vinylAngle + i * 60) * DEG_TO_RAD;
+    int16_t x0 = CENTER_X + cos(a) * rInner;
+    int16_t y0 = CENTER_Y + sin(a) * rInner;
+    int16_t x1 = CENTER_X + cos(a) * rOuter;
+    int16_t y1 = CENTER_Y + sin(a) * rOuter;
+    display.drawLine(x0, y0, x1, y1, COLOR_ACCENT);
+  }
+  display.fillCircle(CENTER_X, CENTER_Y, 8, COLOR_PANEL);
+  display.drawCircle(CENTER_X, CENTER_Y, 10, COLOR_ACCENT);
+}
+
 static void drawVolumeOverlayBar(uint8_t volume, float lerpValue) {
   const int16_t w = UI_SAFE_DIAMETER - 34;
   const int16_t h = 26;
@@ -227,45 +272,84 @@ static void drawVolumeOverlayBar(uint8_t volume, float lerpValue) {
   display.fillRoundRect(barX + 2, barY + 2, fill, barH - 4, 2, COLOR_TEXT);
 }
 
-static void updateVolumeOverlay(const AudioStatus &audio, unsigned long now) {
-  if (!volumeOverlayActive) return;
-  overlayVolumeLerp = overlayVolumeLerp + (audio.volume - overlayVolumeLerp) * 0.35f;
-  drawVolumeOverlayBar(audio.volume, overlayVolumeLerp);
-  if (now > volumeOverlayUntilMs) {
-    volumeOverlayActive = false;
+static void updateVolumeOverlay(const AudioStatus &audio, const BatteryStatus &bat, const ClockTime &clock, unsigned long now) {
+  if (!volumeOverlayActive && !overlayPendingClear) return;
+
+  if (volumeOverlayActive) {
+    overlayVolumeLerp = overlayVolumeLerp + (audio.volume - overlayVolumeLerp) * 0.45f;
+    drawVolumeOverlayBar(audio.volume, overlayVolumeLerp);
+    if (now > volumeOverlayUntilMs) {
+      volumeOverlayActive = false;
+      overlayPendingClear = true;
+      hudNeedsRestore = true;
+    }
+  }
+
+  if (overlayPendingClear && !volumeOverlayActive) {
+    const int16_t w = UI_SAFE_DIAMETER - 34;
+    const int16_t h = 26;
+    const int16_t x = UI_SAFE_LEFT + 17;
+    const int16_t y = CENTER_Y - h / 2;
+    blitVinylRegion(x - 2, y - 2, w + 4, h + 4);
+    // redraw HUD elements overlapped by overlay region only
+    char timeBuf[10];
+    formatTime(timeBuf, sizeof(timeBuf), clock);
+    drawMessagePanel(timeBuf);
+    drawBatteryPanel(bat);
     drawVolumePanel(audio);
+    overlayPendingClear = false;
   }
 }
 
-static void drawBtHud(unsigned long now) {
-  // Animated now-playing style bar
-  const int16_t x = UI_SAFE_LEFT + 20;
-  const int16_t y = UI_SAFE_TOP + 72;
-  const int16_t w = UI_SAFE_DIAMETER - 40;
-  const int16_t h = 32;
-  drawPanel(x, y, w, h, COLOR_ACCENT, COLOR_PANEL);
+static void drawBtHud(const BatteryStatus &bat, const ClockTime &clock, unsigned long now) {
+  char timeBuf[10];
+  formatTime(timeBuf, sizeof(timeBuf), clock);
+
+  // top header
+  const int16_t headerX = UI_SAFE_LEFT + 10;
+  const int16_t headerY = UI_SAFE_TOP + 10;
+  const int16_t headerW = UI_SAFE_DIAMETER - 20;
+  drawPanel(headerX, headerY, headerW, 26, COLOR_ACCENT, COLOR_PANEL);
   display.setTextSize(1);
   display.setTextColor(COLOR_TEXT, COLOR_PANEL);
-  display.setCursor(x + 10, y + 10);
-  display.print("BLUETOOTH MODE");
-  display.setCursor(x + 10, y + 20);
-  display.print("LINK STANDBY");
+  display.setCursor(headerX + 10, headerY + 8);
+  display.print("BLUETOOTH");
+  display.setCursor(headerX + headerW - 54, headerY + 8);
+  display.print(timeBuf);
 
-  const int16_t barX = x + 10;
-  const int16_t barY = y + h + 6;
-  const int16_t barW = w - 20;
-  const int16_t barH = 12;
-  display.fillRoundRect(barX, barY, barW, barH, 4, COLOR_BG);
-  display.drawRoundRect(barX, barY, barW, barH, 4, COLOR_ACCENT);
+  // battery badge
+  BatteryStatus localBat = bat;
+  drawBatteryPanel(localBat);
+
+  // status card
+  const int16_t cardX = UI_SAFE_LEFT + 18;
+  const int16_t cardY = UI_SAFE_TOP + 50;
+  const int16_t cardW = UI_SAFE_DIAMETER - 36;
+  const int16_t cardH = 46;
+  drawPanel(cardX, cardY, cardW, cardH, COLOR_ACCENT, COLOR_PANEL);
+  display.setTextSize(2);
+  display.setTextColor(COLOR_TEXT, COLOR_PANEL);
+  display.setCursor(cardX + 12, cardY + 14);
+  display.print("LINK ");
+  display.setTextColor(COLOR_ACCENT, COLOR_PANEL);
+  display.print("STANDBY");
+
+  // Now playing bar animation
+  const int16_t barX = UI_SAFE_LEFT + 24;
+  const int16_t barY = cardY + cardH + 12;
+  const int16_t barW = UI_SAFE_DIAMETER - 48;
+  const int16_t barH = 18;
+  display.fillRoundRect(barX, barY, barW, barH, 8, COLOR_BG);
+  display.drawRoundRect(barX, barY, barW, barH, 8, COLOR_ACCENT);
 
   if (now - lastBtAnim > 120) {
     lastBtAnim = now;
-    btAnimPhase = (btAnimPhase + 1) % 12;
+    btAnimPhase = (btAnimPhase + 1) % 10;
   }
-  int16_t segW = (barW - 8) / 12;
-  for (uint8_t i = 0; i < 12; ++i) {
+  int16_t segW = (barW - 12) / 10;
+  for (uint8_t i = 0; i < 10; ++i) {
     uint16_t color = (i == btAnimPhase) ? COLOR_TEXT : COLOR_GRID;
-    display.fillRoundRect(barX + 4 + i * segW, barY + 2, segW - 2, barH - 4, 2, color);
+    display.fillRoundRect(barX + 6 + i * segW, barY + 4, segW - 4, barH - 8, 4, color);
   }
 }
 
@@ -287,11 +371,11 @@ void uiInit() {
   uiCache.initialized = false;
 }
 
-void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery, UIMode mode) {
+void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery, UIMode mode, const ClockTime &timeNow) {
   unsigned long now = millis();
-  char timeBuf[6];
-  formatTime(timeBuf, sizeof(timeBuf), now);
-  uint16_t minuteTick = (now / 60000UL) % 1440UL;
+  char timeBuf[10];
+  formatTime(timeBuf, sizeof(timeBuf), timeNow);
+  uint16_t minuteTick = ((timeNow.hour % 24) * 60) + (timeNow.minute % 60);
 
   if (!backgroundDrawn || now - lastBackgroundRefresh > UI_BACKGROUND_REFRESH_MS) {
     drawBackground();
@@ -306,22 +390,27 @@ void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery, UIMode mod
   bool modeDiff = !uiCache.initialized || mode != uiCache.mode;
   bool timeDiff = !uiCache.initialized || minuteTick != uiCache.minuteTick;
 
-  if (modeDiff && mode == UIMode::BT) {
-    volumeOverlayActive = false;
+  if (modeDiff) {
+    hudNeedsRestore = true;
+    if (mode == UIMode::BT) {
+      volumeOverlayActive = false;
+      overlayPendingClear = false;
+    }
   }
 
   if (mode == UIMode::DFP) {
     bool warn = (battery.percent < UI_WARNING_THRESHOLD || battery.level == BatteryLevel::Red);
-    if (batDiff || timeDiff || modeDiff) {
+    if (batDiff || timeDiff || modeDiff || hudNeedsRestore) {
       drawTopBar(battery, timeBuf, warn);
     }
 
-    if ((audioDiff || modeDiff || timeDiff) && (now - lastHudRefresh >= UI_HUD_REFRESH_MS)) {
+    if ((audioDiff || modeDiff || timeDiff || hudNeedsRestore) && (hudNeedsRestore || now - lastHudRefresh >= UI_HUD_REFRESH_MS)) {
       drawTrackPanel(audio, pulseActive);
       drawStatePanel(audio, pulseActive);
       drawMessagePanel(timeBuf);
       drawVolumePanel(audio);
       lastHudRefresh = now;
+      hudNeedsRestore = false;
     }
 
     if (batDiff || (now - lastBatteryRefresh >= UI_BATTERY_REFRESH_MS)) {
@@ -329,14 +418,22 @@ void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery, UIMode mod
       lastBatteryRefresh = now;
     }
 
-    updateVolumeOverlay(audio, now);
+    bool spinning = (audio.state == PlaybackState::Playing) && audio.online;
+    if (spinning && (now - lastVinylStep > 90)) {
+      vinylAngle = (vinylAngle + 5) % 360;
+      drawVinylSpinner(true);
+      lastVinylStep = now;
+    } else if (!spinning) {
+      drawVinylSpinner(false);
+    }
+
+    updateVolumeOverlay(audio, battery, timeNow, now);
   } else {
     if (batDiff || timeDiff || modeDiff) {
-      drawTopBar(battery, timeBuf, battery.percent < UI_WARNING_THRESHOLD || battery.level == BatteryLevel::Red);
-      drawBatteryPanel(battery);
+      drawBtHud(battery, timeNow, now);
     }
-    if (modeDiff || (now - lastBtAnim > 120)) {
-      drawBtHud(now);
+    if (now - lastBtAnim > 120) {
+      drawBtHud(battery, timeNow, now);
     }
   }
 
@@ -344,6 +441,7 @@ void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery, UIMode mod
   uiCache.battery = battery;
   uiCache.mode = mode;
   uiCache.minuteTick = minuteTick;
+  uiCache.clock = timeNow;
   uiCache.initialized = true;
 }
 
@@ -355,6 +453,7 @@ void uiPulse(const char *label) {
 void uiShowVolumeOverlay() {
   unsigned long now = millis();
   volumeOverlayActive = true;
+  overlayPendingClear = false;
   volumeOverlayUntilMs = now + UI_VOLUME_OVERLAY_MS;
   overlayVolumeLerp = uiCache.initialized ? uiCache.audio.volume : DEFAULT_VOLUME;
 }

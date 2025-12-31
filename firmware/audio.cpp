@@ -15,10 +15,10 @@ static unsigned long lastQuery = 0;
 
 static uint16_t detectTrackCount() {
   int16_t count = dfPlayer.readFileCounts();
-  if (count > 0) return count;
+  if (count > 0) return static_cast<uint16_t>(count);
 
   count = dfPlayer.readFileCountsInFolder(1);
-  if (count > 0) return count;
+  if (count > 0) return static_cast<uint16_t>(count);
 
   // Stable fallback: assume single track available
   return 1;
@@ -34,6 +34,10 @@ void audioInit() {
     dfPlayer.volume(currentVolume);
     currentTrack = constrain(currentTrack, (uint16_t)1, trackCount);
     audioPlayTrack(currentTrack);
+  } else {
+    initialized = false;
+    online = false;
+    trackCount = 1;
   }
 }
 
@@ -57,6 +61,7 @@ void audioPlayTrack(uint16_t trackNumber) {
 }
 
 void audioNext() {
+  if (!online || !initialized) return;
   if (trackCount <= 1) return;
   if (currentTrack < trackCount) {
     currentTrack++;
@@ -65,6 +70,7 @@ void audioNext() {
 }
 
 void audioPrev() {
+  if (!online || !initialized) return;
   if (trackCount <= 1) return;
   if (currentTrack > 1) {
     currentTrack--;
