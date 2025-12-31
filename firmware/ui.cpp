@@ -62,7 +62,7 @@ static void drawSafeGridLineH(int16_t y) {
 
 static void drawBackground() {
   display.fillScreen(COLOR_BG);
-  display.drawRGBBitmap(0, 0, vinyl_ui_bitmap, VINYL_UI_WIDTH, VINYL_UI_HEIGHT);
+  display.drawRGBBitmap(0, 0, VINYL_UI_BITMAP_PTR, VINYL_UI_WIDTH, VINYL_UI_HEIGHT);
   display.drawCircle(CENTER_X, CENTER_Y, UI_SAFE_RADIUS, COLOR_DARK);
   display.drawCircle(CENTER_X, CENTER_Y, UI_SAFE_RADIUS - 2, COLOR_PANEL);
 
@@ -87,7 +87,7 @@ static void blitVinylRegion(int16_t x, int16_t y, int16_t w, int16_t h) {
   for (int16_t row = y0; row < y1; ++row) {
     int idx = row * VINYL_UI_WIDTH + x0;
     for (int16_t col = x0; col < x1; ++col) {
-      lineBuf[col - x0] = pgm_read_word(&vinyl_ui_bitmap[idx++]);
+      lineBuf[col - x0] = pgm_read_word(&VINYL_UI_BITMAP_PTR[idx++]);
     }
     display.drawRGBBitmap(x0, row, lineBuf, x1 - x0, 1);
   }
