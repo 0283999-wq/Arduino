@@ -12,6 +12,8 @@ enum class PlaybackState {
 struct AudioStatus {
   uint16_t track;
   uint8_t volume;
+  uint16_t trackCount;
+  bool online;
   PlaybackState state;
 };
 
@@ -21,7 +23,7 @@ void audioPlayTrack(uint16_t trackNumber);
 void audioNext();
 void audioPrev();
 void audioTogglePause();
-void audioVolumeUp();
-void audioVolumeDown();
+bool audioVolumeUp();
+bool audioVolumeDown();
 AudioStatus getAudioStatus();
 

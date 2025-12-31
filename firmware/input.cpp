@@ -15,6 +15,14 @@ static ButtonState touchPrev{PIN_TOUCH_PREV, true, false, false, 0, 0};
 static ButtonState btnVolDown{PIN_BTN_VOL_DOWN, false, true, true, 0, 0};
 static ButtonState btnVolUp{PIN_BTN_VOL_UP, false, true, true, 0, 0};
 
+static void primeButton(ButtonState &btn) {
+  bool reading = digitalRead(btn.pin);
+  btn.lastReading = reading;
+  btn.lastStable = btn.activeHigh ? reading : !reading;
+  btn.lastChange = millis();
+  btn.lastRepeat = btn.lastChange;
+}
+
 static bool readPressed(const ButtonState &btn) {
   bool raw = digitalRead(btn.pin);
   return btn.activeHigh ? raw : !raw;
@@ -71,6 +79,12 @@ void inputInit() {
 
   pinMode(PIN_BTN_VOL_DOWN, INPUT_PULLUP);
   pinMode(PIN_BTN_VOL_UP, INPUT_PULLUP);
+
+  primeButton(touchPlay);
+  primeButton(touchNext);
+  primeButton(touchPrev);
+  primeButton(btnVolDown);
+  primeButton(btnVolUp);
 }
 
 InputEvent inputPoll() {

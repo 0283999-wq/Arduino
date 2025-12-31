@@ -8,4 +8,5 @@
 void uiInit();
 void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery);
 void uiPulse(const char *label);
+void uiShowVolumeOverlay();
 

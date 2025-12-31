@@ -9,6 +9,8 @@ static const uint8_t PIN_SCREEN_DC = 16;
 static const uint8_t PIN_SCREEN_CS = 17;
 static const uint8_t PIN_SCREEN_RST = 5;
 
+#define SCREEN_ROTATION 2
+
 static const uint8_t PIN_DFPLAYER_TX = 26; // DFPlayer TX -> ESP32 RX pin
 static const uint8_t PIN_DFPLAYER_RX = 27; // DFPlayer RX -> ESP32 TX pin
 
@@ -41,6 +43,7 @@ static const float CELL_MAX_V = 4.2f;
 
 // UI timing
 static const uint16_t UI_ANIM_MS = 350;
+static const uint16_t UI_VOLUME_OVERLAY_MS = 1200;
 static const uint16_t UI_SCANLINE_SPACING = 6;
 static const uint16_t UI_HUD_REFRESH_MS = 100;
 static const uint16_t UI_BATTERY_REFRESH_MS = 2000;
@@ -51,10 +54,11 @@ static const uint8_t UI_WARNING_THRESHOLD = 15; // battery percent
 
 // Colors
 static const uint16_t COLOR_BG = 0x0000; // Black
-static const uint16_t COLOR_GRID = 0x3186; // Dark cyan/green tone
+static const uint16_t COLOR_GRID = 0x19E7; // Dim cyan grid
 static const uint16_t COLOR_TEXT = 0x07E0; // Green
+static const uint16_t COLOR_ACCENT = 0x05DF; // Cyan accent
 static const uint16_t COLOR_AMBER = 0xFD20; // Amber/Orange
-static const uint16_t COLOR_DARK = 0x39E7; // Dark grayish green
+static const uint16_t COLOR_DARK = 0x2104; // Dark slate
 static const uint16_t COLOR_PANEL = 0x0841; // Very dark blue-green
 static const uint16_t COLOR_WARNING = 0xF980; // Warm amber/red
 
@@ -62,4 +66,8 @@ static const uint16_t COLOR_WARNING = 0xF980; // Warm amber/red
 static const uint16_t SCREEN_SIZE = 240;
 static const uint16_t CENTER_X = SCREEN_SIZE / 2;
 static const uint16_t CENTER_Y = SCREEN_SIZE / 2;
+static const uint16_t UI_SAFE_RADIUS = 110;
+static const uint16_t UI_SAFE_DIAMETER = UI_SAFE_RADIUS * 2;
+static const uint16_t UI_SAFE_LEFT = CENTER_X - UI_SAFE_RADIUS;
+static const uint16_t UI_SAFE_TOP = CENTER_Y - UI_SAFE_RADIUS;
 

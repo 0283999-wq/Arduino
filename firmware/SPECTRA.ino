@@ -33,12 +33,14 @@ void loop() {
       uiPulse("TRACK <<");
       break;
     case InputEvent::VolUp:
-      audioVolumeUp();
-      uiPulse("VOL +");
+      if (audioVolumeUp()) {
+        uiShowVolumeOverlay();
+      }
       break;
     case InputEvent::VolDown:
-      audioVolumeDown();
-      uiPulse("VOL -");
+      if (audioVolumeDown()) {
+        uiShowVolumeOverlay();
+      }
       break;
     default:
       break;
