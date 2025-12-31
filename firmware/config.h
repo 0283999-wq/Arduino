@@ -30,9 +30,10 @@ static const uint8_t MAX_VOLUME = 30;
 static const uint8_t DEFAULT_VOLUME = 20;
 
 // Debounce timings (milliseconds)
-static const uint16_t DEBOUNCE_MS = 45;
-static const uint16_t HOLD_MS = 500;
-static const uint16_t REPEAT_MS = 200;
+static const uint16_t DEBOUNCE_MS = 50;
+static const uint16_t HOLD_MS = 250;
+static const uint16_t REPEAT_MS = 80;
+static const uint16_t MODE_TOGGLE_HOLD_MS = 2000;
 
 // Battery measurement
 static const float ADC_REFERENCE = 3.3f;
@@ -43,7 +44,7 @@ static const float CELL_MAX_V = 4.2f;
 
 // UI timing
 static const uint16_t UI_ANIM_MS = 350;
-static const uint16_t UI_VOLUME_OVERLAY_MS = 1200;
+static const uint16_t UI_VOLUME_OVERLAY_MS = 900;
 static const uint16_t UI_SCANLINE_SPACING = 6;
 static const uint16_t UI_HUD_REFRESH_MS = 100;
 static const uint16_t UI_BATTERY_REFRESH_MS = 2000;

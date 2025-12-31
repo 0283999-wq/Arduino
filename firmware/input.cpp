@@ -5,22 +5,28 @@ struct ButtonState {
   bool activeHigh;
   bool lastStable;
   bool lastReading;
+  bool stablePressed;
+  unsigned long pressedAt;
   unsigned long lastChange;
   unsigned long lastRepeat;
 };
 
-static ButtonState touchPlay{PIN_TOUCH_PLAY, true, false, false, 0, 0};
-static ButtonState touchNext{PIN_TOUCH_NEXT, true, false, false, 0, 0};
-static ButtonState touchPrev{PIN_TOUCH_PREV, true, false, false, 0, 0};
-static ButtonState btnVolDown{PIN_BTN_VOL_DOWN, false, true, true, 0, 0};
-static ButtonState btnVolUp{PIN_BTN_VOL_UP, false, true, true, 0, 0};
+static ButtonState touchPlay{PIN_TOUCH_PLAY, true, false, false, false, 0, 0, 0};
+static ButtonState touchNext{PIN_TOUCH_NEXT, true, false, false, false, 0, 0, 0};
+static ButtonState touchPrev{PIN_TOUCH_PREV, true, false, false, false, 0, 0, 0};
+static ButtonState btnVolDown{PIN_BTN_VOL_DOWN, false, true, true, false, 0, 0, 0};
+static ButtonState btnVolUp{PIN_BTN_VOL_UP, false, true, true, false, 0, 0, 0};
+static unsigned long comboStartMs = 0;
+static bool comboFired = false;
 
 static void primeButton(ButtonState &btn) {
   bool reading = digitalRead(btn.pin);
   btn.lastReading = reading;
   btn.lastStable = btn.activeHigh ? reading : !reading;
+  btn.stablePressed = false;
   btn.lastChange = millis();
   btn.lastRepeat = btn.lastChange;
+  btn.pressedAt = 0;
 }
 
 static bool readPressed(const ButtonState &btn) {
@@ -28,7 +34,7 @@ static bool readPressed(const ButtonState &btn) {
   return btn.activeHigh ? raw : !raw;
 }
 
-static InputEvent processMomentary(ButtonState &btn, InputEvent eventForPress) {
+static bool updateButton(ButtonState &btn) {
   bool pressed = readPressed(btn);
   unsigned long now = millis();
 
@@ -41,35 +47,27 @@ static InputEvent processMomentary(ButtonState &btn, InputEvent eventForPress) {
     if (pressed != btn.lastStable) {
       btn.lastStable = pressed;
       if (pressed) {
-        return eventForPress;
+        btn.stablePressed = true;
+        btn.pressedAt = now;
+        btn.lastRepeat = now;
+        return true;
       }
+      btn.stablePressed = false;
+      btn.pressedAt = 0;
     }
   }
-  return InputEvent::None;
+  return false;
 }
 
-static InputEvent processRepeat(ButtonState &btn, InputEvent eventForPress) {
-  bool pressed = readPressed(btn);
-  unsigned long now = millis();
-
-  if (pressed != btn.lastReading) {
-    btn.lastChange = now;
-    btn.lastReading = pressed;
+static bool shouldRepeat(ButtonState &btn, unsigned long now) {
+  if (!btn.stablePressed) return false;
+  if (btn.pressedAt == 0) return false;
+  if (now - btn.pressedAt < HOLD_MS) return false;
+  if (now - btn.lastRepeat >= REPEAT_MS) {
+    btn.lastRepeat = now;
+    return true;
   }
-
-  if ((now - btn.lastChange) > DEBOUNCE_MS) {
-    if (pressed != btn.lastStable) {
-      btn.lastStable = pressed;
-      if (pressed) {
-        btn.lastRepeat = now;
-        return eventForPress;
-      }
-    } else if (pressed && (now - btn.lastRepeat) > REPEAT_MS) {
-      btn.lastRepeat = now;
-      return eventForPress;
-    }
-  }
-  return InputEvent::None;
+  return false;
 }
 
 void inputInit() {
@@ -88,20 +86,38 @@ void inputInit() {
 }
 
 InputEvent inputPoll() {
-  InputEvent e = processMomentary(touchPlay, InputEvent::PlayPause);
-  if (e != InputEvent::None) return e;
+  unsigned long now = millis();
 
-  e = processMomentary(touchNext, InputEvent::Next);
-  if (e != InputEvent::None) return e;
+  // Update touch buttons (edge detection only)
+  if (updateButton(touchPrev)) return InputEvent::Prev;
+  if (updateButton(touchNext)) return InputEvent::Next;
+  if (updateButton(touchPlay)) return InputEvent::PlayPause;
 
-  e = processMomentary(touchPrev, InputEvent::Prev);
-  if (e != InputEvent::None) return e;
+  // Update mechanical volume buttons with repeat
+  bool volUpPressed = updateButton(btnVolUp);
+  bool volDownPressed = updateButton(btnVolDown);
 
-  e = processRepeat(btnVolUp, InputEvent::VolUp);
-  if (e != InputEvent::None) return e;
+  bool bothPressed = btnVolUp.stablePressed && btnVolDown.stablePressed;
+  if (bothPressed) {
+    if (comboStartMs == 0) {
+      comboStartMs = now;
+      comboFired = false;
+    } else if (!comboFired && (now - comboStartMs >= MODE_TOGGLE_HOLD_MS)) {
+      comboFired = true;
+      return InputEvent::ModeToggle;
+    }
+  } else {
+    comboStartMs = 0;
+    comboFired = false;
+  }
 
-  e = processRepeat(btnVolDown, InputEvent::VolDown);
-  if (e != InputEvent::None) return e;
+  if (!bothPressed) {
+    if (volUpPressed) return InputEvent::VolUp;
+    if (volDownPressed) return InputEvent::VolDown;
+
+    if (shouldRepeat(btnVolUp, now)) return InputEvent::VolUp;
+    if (shouldRepeat(btnVolDown, now)) return InputEvent::VolDown;
+  }
 
   return InputEvent::None;
 }

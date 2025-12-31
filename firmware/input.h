@@ -9,7 +9,8 @@ enum class InputEvent {
   Next,
   Prev,
   VolUp,
-  VolDown
+  VolDown,
+  ModeToggle
 };
 
 void inputInit();

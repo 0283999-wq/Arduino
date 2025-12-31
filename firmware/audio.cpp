@@ -20,18 +20,8 @@ static uint16_t detectTrackCount() {
   count = dfPlayer.readFileCountsInFolder(1);
   if (count > 0) return count;
 
-  // Fallback: sequential probe without exceeding a reasonable limit
-  const uint16_t maxProbe = 300;
-  for (uint16_t i = 1; i <= maxProbe; ++i) {
-    if (!dfPlayer.playMp3Folder(i)) {
-      return max((uint16_t)1, static_cast<uint16_t>(i - 1));
-    }
-    delay(5);
-    if (dfPlayer.readType() == DFPlayerError) {
-      return max((uint16_t)1, static_cast<uint16_t>(i - 1));
-    }
-  }
-  return maxProbe;
+  // Stable fallback: assume single track available
+  return 1;
 }
 
 void audioInit() {
