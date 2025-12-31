@@ -42,6 +42,12 @@ static const float CELL_MAX_V = 4.2f;
 // UI timing
 static const uint16_t UI_ANIM_MS = 350;
 static const uint16_t UI_SCANLINE_SPACING = 6;
+static const uint16_t UI_HUD_REFRESH_MS = 100;
+static const uint16_t UI_BATTERY_REFRESH_MS = 2000;
+static const uint32_t UI_BACKGROUND_REFRESH_MS = 60000;
+
+// UI thresholds
+static const uint8_t UI_WARNING_THRESHOLD = 15; // battery percent
 
 // Colors
 static const uint16_t COLOR_BG = 0x0000; // Black
@@ -49,6 +55,8 @@ static const uint16_t COLOR_GRID = 0x3186; // Dark cyan/green tone
 static const uint16_t COLOR_TEXT = 0x07E0; // Green
 static const uint16_t COLOR_AMBER = 0xFD20; // Amber/Orange
 static const uint16_t COLOR_DARK = 0x39E7; // Dark grayish green
+static const uint16_t COLOR_PANEL = 0x0841; // Very dark blue-green
+static const uint16_t COLOR_WARNING = 0xF980; // Warm amber/red
 
 // UI layout
 static const uint16_t SCREEN_SIZE = 240;
