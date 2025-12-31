@@ -1,1 +1,182 @@
+Perfecto. Aquí tienes EL PROMPT COMPLETO, listo para copiar y pegar tal cual en Codex (o cualquier modelo de código).
+Está escrito para que NO toque el hardware, NO cambie pines, NO rote la pantalla, y respete todo lo que ya funciona.
 
+⸻
+
+🔥 PROMPT PARA CODEX — PROYECTO SPECTRA
+
+Contexto general
+Estás desarrollando el firmware final de un reproductor MP3 portátil DIY llamado SPECTRA, con estética retrofuturista post-apocalíptica (ruinas, vegetación reclaiming tech, AI vieja pero viva).
+El objetivo es un código estable de viaje, no experimental, que controle música, UI y estado del sistema.
+
+⸻
+
+🧠 Microcontrolador
+•ESP32 NodeMCU
+•Arduino framework
+•NO usar WiFi ni Bluetooth interno del ESP32
+
+⸻
+
+🖥️ Pantalla
+•Display circular GC9A01 240x240 SPI
+•Ya funciona correctamente
+•La imagen está invertida / rotada, PERO NO DEBE CAMBIARSE
+•Mantener exactamente la rotación actual (NO llamar setRotation() diferente)
+•No hay pin BLK (backlight siempre encendido)
+
+Pines de la pantalla (NO CAMBIAR):
+•SCL / SCK → GPIO 18
+•SDA / MOSI → GPIO 23
+•DC → GPIO 16
+•CS → GPIO 17
+•RST → GPIO 5
+•VCC → 3.3V
+•GND → GND
+
+Usar Adafruit_GC9A01A o librería equivalente estable.
+
+⸻
+
+🎵 Reproducción de audio
+•DFPlayer Mini
+•Comunicación por UART
+
+Pines DFPlayer (NO CAMBIAR):
+•DF TX → ESP32 GPIO 26
+•DF RX → ESP32 GPIO 27 (con resistencia ~1k en serie idealmente)
+•VCC → 5V
+•GND → GND
+
+Formato SD:
+
+/mp3/0001.mp3
+/mp3/0002.mp3
+/mp3/0003.mp3
+...
+
+Nota: el DFPlayer NO puede leer nombres reales de canciones.
+La UI debe mostrar TRACK 0001, TRACK 0002, etc.
+(Los nombres “Latin Mafia” solo son conceptuales, no reales).
+
+⸻
+
+🎛️ Controles
+
+Botones touch (TTP223)
+•Salida HIGH cuando se tocan
+•Alimentados a 3.3V
+
+Asignación:
+•GPIO 32 → Play / Pause
+•GPIO 33 → Next track
+•GPIO 25 → Previous track
+
+Botones mecánicos (4 patas, usando 2)
+•Usar INPUT_PULLUP
+•Presionan a GND
+
+Asignación:
+•GPIO 21 → Volumen –
+•GPIO 22 → Volumen +
+
+⸻
+
+🔋 Batería
+•Batería Li-ion 1S (3.0–4.2V)
+•Medición por divisor resistivo (ej. 100k/100k)
+
+ADC:
+•Nodo del divisor → GPIO 35
+
+Mostrar en pantalla:
+•Voltaje (ej. 3.87V)
+•Porcentaje aproximado
+•Indicador visual (barra o icono)
+•Colores:
+•Verde > 40%
+•Ámbar 15–40%
+•Rojo < 15%
+
+⸻
+
+🎨 UI / Estética (MUY IMPORTANTE)
+
+Estilo visual:
+•Retrofuturista
+•Post-apocalíptico
+•Tecnología vieja sobreviviendo
+•Colores:
+•Negro dominante
+•Verde fósforo / cian
+•Ámbar / naranja para alertas
+•Gris oscuro para estructuras
+
+Elementos gráficos deseados:
+•Rejillas
+•Círculos concéntricos
+•Marcos técnicos
+•“Ruido” visual leve (scanlines, glitches sutiles)
+•Texto tipo sistema antiguo / AI
+
+Texto conceptual permitido:
+•“SPECTRA”
+•“SYSTEM ONLINE”
+•“AUDIO CORE ACTIVE”
+•“RUINS MODE”
+•“FIELD UNIT”
+
+(NO usar referencias reales a agencias, gobiernos, etc.)
+
+⸻
+
+📺 Información a mostrar en pantalla
+•TRACK actual (0001, 0002…)
+•Estado: PLAY / PAUSE
+•Barra de volumen
+•Indicador de batería
+•Animación leve cuando:
+•Cambia canción
+•Se pausa / reproduce
+•Se presiona botón
+
+⸻
+
+⚙️ Comportamiento del sistema
+•Al encender:
+•Inicializa pantalla
+•Inicializa DFPlayer
+•Empieza en TRACK 0001
+•Botones deben tener debounce por software
+•Código modular y claro
+•Priorizar estabilidad sobre efectos
+
+⸻
+
+🚫 Restricciones IMPORTANTES
+•❌ NO cambiar pines
+•❌ NO cambiar rotación de pantalla
+•❌ NO usar WiFi / Bluetooth interno
+•❌ NO usar delays largos que congelen la UI
+•❌ NO asumir que el DFPlayer devuelve nombres de canciones
+
+⸻
+
+✅ Objetivo final
+
+Generar UN SOLO SKETCH COMPLETO, listo para subir, que:
+•Controle todo el sistema
+•Tenga una UI coherente y estética
+•Sea estable para uso prolongado (viaje)
+•Se sienta como un dispositivo real, no un prototipo
+
+⸻
+
+Si quieres, después puedo ayudarte a:
+•Revisar el código que te dé Codex
+•Optimizar FPS / consumo
+•Ajustar la UI sin tocar hardware
+•Preparar SPECTRA v2 con Bluetooth integrado
+
+Pero este prompt ya es nivel ingeniería real.
+Cópielo tal cual y mándalo 🚀
