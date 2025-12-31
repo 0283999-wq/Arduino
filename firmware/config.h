@@ -42,6 +42,10 @@ static const float VOLTAGE_DIVIDER_RATIO = 2.0f; // 100k/100k divider doubles vo
 static const float CELL_MIN_V = 3.3f;
 static const float CELL_MAX_V = 4.2f;
 
+// Manual time seed (used if no RTC present)
+static const uint8_t MANUAL_TIME_START_HOUR = 10; // set to your local hour
+static const uint8_t MANUAL_TIME_START_MIN = 50;  // set to your local minute
+
 // UI timing
 static const uint16_t UI_ANIM_MS = 350;
 static const uint16_t UI_VOLUME_OVERLAY_MS = 900;

@@ -40,7 +40,9 @@ static ClockTime rtcNow() {
     rtcPresent = false;
   }
 
-  unsigned long totalMinutes = ((millis() - rtcFallbackStart) / 60000UL) % 1440UL;
+  unsigned long elapsedMinutes = ((millis() - rtcFallbackStart) / 60000UL);
+  unsigned long startMinutes = (MANUAL_TIME_START_HOUR % 24) * 60UL + (MANUAL_TIME_START_MIN % 60);
+  unsigned long totalMinutes = (startMinutes + elapsedMinutes) % 1440UL;
   t.hour = (totalMinutes / 60) % 24;
   t.minute = totalMinutes % 60;
   t.valid = false;
