@@ -4,7 +4,7 @@
 #include <Adafruit_GC9A01A.h>
 #include <SPI.h>
 #include <math.h>
-#include "vinyl_ui.h"
+#include "vinyl_assets.h"
 
 static Adafruit_GC9A01A display = Adafruit_GC9A01A(PIN_SCREEN_CS, PIN_SCREEN_DC, PIN_SCREEN_MOSI, PIN_SCREEN_SCK, PIN_SCREEN_RST);
 
@@ -34,6 +34,10 @@ static bool overlayPendingClear = false;
 static bool hudNeedsRestore = false;
 
 static void formatTime(char *buf, size_t len, const ClockTime &clock) {
+  if (!clock.valid) {
+    snprintf(buf, len, "--:--");
+    return;
+  }
   uint8_t hours = clock.hour % 24;
   uint8_t minutes = clock.minute % 60;
   bool pm = hours >= 12;
@@ -63,19 +67,6 @@ static void drawSafeGridLineH(int16_t y) {
 static void drawBackground() {
   display.fillScreen(COLOR_BG);
   display.drawRGBBitmap(0, 0, VINYL_UI_BITMAP_PTR, VINYL_UI_WIDTH, VINYL_UI_HEIGHT);
-  display.drawCircle(CENTER_X, CENTER_Y, UI_SAFE_RADIUS, COLOR_DARK);
-  display.drawCircle(CENTER_X, CENTER_Y, UI_SAFE_RADIUS - 2, COLOR_PANEL);
-
-  for (int16_t x = UI_SAFE_LEFT + 10; x < UI_SAFE_LEFT + UI_SAFE_DIAMETER; x += 16) {
-    drawSafeGridLineV(x);
-  }
-  for (int16_t y = UI_SAFE_TOP + 12; y < UI_SAFE_TOP + UI_SAFE_DIAMETER; y += 16) {
-    drawSafeGridLineH(y);
-  }
-
-  for (uint16_t r = 18; r < UI_SAFE_RADIUS; r += 24) {
-    display.drawCircle(CENTER_X, CENTER_Y, r, COLOR_DARK);
-  }
 }
 
 static void blitVinylRegion(int16_t x, int16_t y, int16_t w, int16_t h) {
@@ -123,109 +114,78 @@ static void drawTopBar(const BatteryStatus &bat, const char *timeStr, bool warn)
 }
 
 static void drawTrackPanel(const AudioStatus &audio, bool pulse) {
-  const int16_t x = UI_SAFE_LEFT + 14;
-  const int16_t y = UI_SAFE_TOP + 36;
-  const int16_t w = UI_SAFE_DIAMETER - 28;
-  const int16_t h = 32;
-  uint16_t border = pulse ? COLOR_AMBER : COLOR_ACCENT;
-  drawPanel(x, y, w, h, border, COLOR_PANEL);
-
+  const int16_t w = 160;
+  const int16_t h = 22;
+  const int16_t x = CENTER_X - w / 2;
+  const int16_t y = UI_SAFE_TOP + 6;
+  display.fillRect(x, y, w, h, COLOR_BG);
   display.setTextSize(2);
-  display.setTextColor(COLOR_TEXT, COLOR_PANEL);
-  display.setCursor(x + 10, y + 8);
-  display.print("TRACK ");
-  char buf[6];
-  snprintf(buf, sizeof(buf), "%04d", audio.track);
-  display.print(buf);
-
-  display.setTextSize(1);
-  display.setTextColor(COLOR_ACCENT, COLOR_PANEL);
-  display.setCursor(x + w - 54, y + 10);
-  display.print("/");
-  snprintf(buf, sizeof(buf), "%03d", audio.trackCount);
+  display.setTextColor(pulse ? COLOR_AMBER : COLOR_TEXT, COLOR_BG);
+  display.setCursor(x + 6, y + 4);
+  char buf[12];
+  snprintf(buf, sizeof(buf), "TRACK %04d", audio.track);
   display.print(buf);
 }
 
 static void drawStatePanel(const AudioStatus &audio, bool pulse) {
-  const int16_t x = UI_SAFE_LEFT + 14;
-  const int16_t y = UI_SAFE_TOP + 74;
-  const int16_t w = UI_SAFE_DIAMETER - 28;
-  const int16_t h = 26;
-  uint16_t border = pulse ? COLOR_AMBER : COLOR_ACCENT;
-  drawPanel(x, y, w, h, border, COLOR_PANEL);
-
+  const int16_t w = 70;
+  const int16_t h = 18;
+  const int16_t x = UI_SAFE_LEFT + UI_SAFE_DIAMETER - w - 12;
+  const int16_t y = UI_SAFE_TOP + 10;
+  display.fillRect(x, y, w, h, COLOR_BG);
   display.setTextSize(1);
-  display.setTextColor(COLOR_TEXT, COLOR_PANEL);
-  display.setCursor(x + 10, y + 8);
-  display.print(audio.state == PlaybackState::Playing ? "PLAY" : "PAUSE");
-
-  display.setCursor(x + w - 70, y + 8);
-  display.setTextColor(audio.online ? COLOR_ACCENT : COLOR_AMBER, COLOR_PANEL);
-  display.print(audio.online ? "AUDIO CORE" : "AUDIO OFFLINE");
+  display.setTextColor(pulse ? COLOR_AMBER : COLOR_ACCENT, COLOR_BG);
+  display.setCursor(x + 2, y + 4);
+  char buf[8];
+  snprintf(buf, sizeof(buf), "%d/%d", audio.track, audio.trackCount);
+  display.print(buf);
 }
 
 static void drawVolumePanel(const AudioStatus &audio) {
-  const int16_t x = UI_SAFE_LEFT + 14;
-  const int16_t y = UI_SAFE_TOP + 164;
-  const int16_t w = UI_SAFE_DIAMETER - 28;
-  const int16_t h = 24;
-  drawPanel(x, y, w, h, COLOR_ACCENT, COLOR_PANEL);
-
+  const int16_t x = UI_SAFE_LEFT + UI_SAFE_DIAMETER - 100;
+  const int16_t y = UI_SAFE_TOP + 120;
+  display.fillRect(x, y, 90, 20, COLOR_BG);
   display.setTextSize(1);
-  display.setTextColor(COLOR_ACCENT, COLOR_PANEL);
-  display.setCursor(x + 10, y + 7);
-  display.print("VOL");
-
-  uint16_t barX = x + 36;
-  uint16_t barY = y + 7;
-  uint16_t barW = w - 60;
-  uint16_t barH = h - 12;
-  display.drawRoundRect(barX, barY, barW, barH, 3, COLOR_ACCENT);
-  uint16_t fill = map(audio.volume, MIN_VOLUME, MAX_VOLUME, 0, barW - 4);
-  display.fillRoundRect(barX + 2, barY + 2, fill, barH - 4, 2, COLOR_TEXT);
+  display.setTextColor(COLOR_TEXT, COLOR_BG);
+  display.setCursor(x, y + 6);
+  display.print("VOL. ");
+  uint8_t percent = map(audio.volume, MIN_VOLUME, MAX_VOLUME, 0, 100);
+  display.print(percent);
+  display.print("%");
 }
 
 static void drawBatteryPanel(const BatteryStatus &bat) {
-  const int16_t x = UI_SAFE_LEFT + 14;
-  const int16_t y = UI_SAFE_TOP + 118;
-  const int16_t w = UI_SAFE_DIAMETER - 28;
-  const int16_t h = 32;
-  drawPanel(x, y, w, h, COLOR_ACCENT, COLOR_PANEL);
-
+  const int16_t x = UI_SAFE_LEFT + 8;
+  const int16_t y = UI_SAFE_TOP + 6;
+  display.fillRect(x, y, 80, 20, COLOR_BG);
   display.setTextSize(1);
-  display.setTextColor(COLOR_TEXT, COLOR_PANEL);
-  display.setCursor(x + 10, y + 8);
-  display.print("BAT ");
+  display.setTextColor(COLOR_ACCENT, COLOR_BG);
+  display.setCursor(x, y + 6);
   display.print(bat.voltage, 2);
-  display.print("V  ");
+  display.print("V");
+  display.setCursor(x, y + 14);
   display.print(bat.percent);
   display.print("%");
 
-  uint16_t iconX = x + w - 58;
-  uint16_t iconY = y + 6;
-  uint16_t iconW = 40;
-  uint16_t iconH = h - 12;
-  display.drawRoundRect(iconX, iconY, iconW, iconH, 3, COLOR_GRID);
-  display.fillRect(iconX + iconW, iconY + 4, 4, iconH - 8, COLOR_GRID);
-
-  uint16_t fill = map(bat.percent, 0, 100, 0, iconW - 4);
-  uint16_t color = COLOR_AMBER;
-  if (bat.level == BatteryLevel::Green) color = COLOR_TEXT;
-  if (bat.level == BatteryLevel::Red) color = COLOR_WARNING;
-  display.fillRoundRect(iconX + 2, iconY + 2, fill, iconH - 4, 2, color);
+  uint16_t iconX = x + 52;
+  uint16_t iconY = y + 2;
+  uint16_t iconW = 24;
+  uint16_t iconH = 12;
+  display.drawRect(iconX, iconY, iconW, iconH, COLOR_ACCENT);
+  uint16_t fill = map(bat.percent, 0, 100, 0, iconW - 2);
+  uint16_t color = (bat.level == BatteryLevel::Red) ? COLOR_WARNING : COLOR_TEXT;
+  display.fillRect(iconX + 1, iconY + 1, fill, iconH - 2, color);
 }
 
 static void drawMessagePanel(const char *timeStr) {
-  const int16_t x = UI_SAFE_LEFT + 14;
-  const int16_t y = UI_SAFE_TOP + 100;
-  const int16_t w = UI_SAFE_DIAMETER - 28;
-  const int16_t h = 16;
-  display.fillRoundRect(x, y, w, h, 6, COLOR_BG);
+  const int16_t y = UI_SAFE_TOP + 170;
+  display.fillRect(UI_SAFE_LEFT + 10, y, UI_SAFE_DIAMETER - 20, 16, COLOR_BG);
   display.setTextSize(1);
   display.setTextColor(COLOR_ACCENT, COLOR_BG);
-  display.setCursor(x + 6, y + 4);
-  display.print("TIME ");
-  display.print(timeStr);
+  display.setCursor(UI_SAFE_LEFT + 10, y + 4);
+  display.print("00:00");
+  display.setCursor(UI_SAFE_LEFT + UI_SAFE_DIAMETER - 50, y + 4);
+  display.print("00:00");
 }
 
 static void drawVinylSpinner(bool spinning) {
@@ -272,11 +232,22 @@ static void drawVolumeOverlayBar(uint8_t volume, float lerpValue) {
   display.fillRoundRect(barX + 2, barY + 2, fill, barH - 4, 2, COLOR_TEXT);
 }
 
+static void drawEqBars(unsigned long now) {
+  const int16_t x = UI_SAFE_LEFT + 10;
+  const int16_t y = UI_SAFE_TOP + 60;
+  const int16_t h = 80;
+  display.fillRect(x, y, 40, h, COLOR_BG);
+  for (uint8_t i = 0; i < 4; ++i) {
+    uint16_t barH = (now / 50 + i * 30) % h;
+    display.fillRect(x + i * 8, y + (h - barH), 6, barH, COLOR_ACCENT);
+  }
+}
+
 static void updateVolumeOverlay(const AudioStatus &audio, const BatteryStatus &bat, const ClockTime &clock, unsigned long now) {
   if (!volumeOverlayActive && !overlayPendingClear) return;
 
   if (volumeOverlayActive) {
-    overlayVolumeLerp = overlayVolumeLerp + (audio.volume - overlayVolumeLerp) * 0.45f;
+    overlayVolumeLerp = audio.volume;
     drawVolumeOverlayBar(audio.volume, overlayVolumeLerp);
     if (now > volumeOverlayUntilMs) {
       volumeOverlayActive = false;
@@ -396,6 +367,9 @@ void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery, UIMode mod
       volumeOverlayActive = false;
       overlayPendingClear = false;
     }
+    drawBackground();
+    backgroundDrawn = true;
+    lastBackgroundRefresh = now;
   }
 
   if (mode == UIMode::DFP) {
@@ -409,6 +383,7 @@ void uiUpdate(const AudioStatus &audio, const BatteryStatus &battery, UIMode mod
       drawStatePanel(audio, pulseActive);
       drawMessagePanel(timeBuf);
       drawVolumePanel(audio);
+      drawEqBars(now);
       lastHudRefresh = now;
       hudNeedsRestore = false;
     }

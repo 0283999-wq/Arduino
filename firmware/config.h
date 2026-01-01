@@ -31,8 +31,10 @@ static const uint8_t DEFAULT_VOLUME = 20;
 
 // Debounce timings (milliseconds)
 static const uint16_t DEBOUNCE_MS = 50;
-static const uint16_t HOLD_MS = 250;
-static const uint16_t REPEAT_MS = 80;
+static const uint16_t HOLD_MS = 120;
+static const uint16_t REPEAT_MS_SLOW = 100;
+static const uint16_t REPEAT_MS_FAST = 50;
+static const uint16_t REPEAT_ACCEL_MS = 1000;
 static const uint16_t MODE_TOGGLE_HOLD_MS = 2000;
 
 // Battery measurement

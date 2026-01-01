@@ -11,6 +11,8 @@ static BatteryStatus cachedBattery{};
 static UIMode currentMode = UIMode::DFP;
 static bool rtcPresent = false;
 static unsigned long rtcFallbackStart = 0;
+static bool manualTimeSet = false;
+static uint16_t manualStartMinutes = 0;
 
 static uint8_t bcdToDec(uint8_t val) {
   return ((val / 16) * 10) + (val % 16);
@@ -21,6 +23,7 @@ static void rtcInit() {
   Wire.beginTransmission(0x68);
   rtcPresent = (Wire.endTransmission() == 0);
   rtcFallbackStart = millis();
+  manualTimeSet = false;
 }
 
 static ClockTime rtcNow() {
@@ -40,13 +43,36 @@ static ClockTime rtcNow() {
     rtcPresent = false;
   }
 
-  unsigned long elapsedMinutes = ((millis() - rtcFallbackStart) / 60000UL);
-  unsigned long startMinutes = (MANUAL_TIME_START_HOUR % 24) * 60UL + (MANUAL_TIME_START_MIN % 60);
-  unsigned long totalMinutes = (startMinutes + elapsedMinutes) % 1440UL;
-  t.hour = (totalMinutes / 60) % 24;
-  t.minute = totalMinutes % 60;
+  if (manualTimeSet) {
+    unsigned long elapsedMinutes = ((millis() - rtcFallbackStart) / 60000UL);
+    unsigned long totalMinutes = (manualStartMinutes + elapsedMinutes) % 1440UL;
+    t.hour = (totalMinutes / 60) % 24;
+    t.minute = totalMinutes % 60;
+    t.valid = true;
+    return t;
+  }
+
+  t.hour = 0;
+  t.minute = 0;
   t.valid = false;
   return t;
+}
+
+static void handleSerialTime() {
+  if (!Serial.available()) return;
+  String line = Serial.readStringUntil('\n');
+  line.trim();
+  if (line.length() < 4) return;
+  int sep = line.indexOf(':');
+  if (sep < 0) return;
+  if (sep < 2) return;
+  uint8_t hh = (uint8_t)line.substring(sep - 2, sep).toInt();
+  uint8_t mm = (uint8_t)line.substring(sep + 1).toInt();
+  if (hh < 24 && mm < 60) {
+    manualStartMinutes = hh * 60 + mm;
+    rtcFallbackStart = millis();
+    manualTimeSet = true;
+  }
 }
 
 void setup() {
@@ -105,6 +131,7 @@ void loop() {
   }
 
   audioLoop();
+  handleSerialTime();
 
   unsigned long now = millis();
   if (now - lastBatteryRead > 2000) {

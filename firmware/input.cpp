@@ -63,7 +63,8 @@ static bool shouldRepeat(ButtonState &btn, unsigned long now) {
   if (!btn.stablePressed) return false;
   if (btn.pressedAt == 0) return false;
   if (now - btn.pressedAt < HOLD_MS) return false;
-  if (now - btn.lastRepeat >= REPEAT_MS) {
+  uint16_t interval = (now - btn.pressedAt >= REPEAT_ACCEL_MS) ? REPEAT_MS_FAST : REPEAT_MS_SLOW;
+  if (now - btn.lastRepeat >= interval) {
     btn.lastRepeat = now;
     return true;
   }
