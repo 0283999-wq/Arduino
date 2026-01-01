@@ -27,11 +27,16 @@ typedef struct {
 #define VINYL_UI_HEIGHT 240
 #endif
 
+#ifndef VINYL_UI_BITMAP_PTR
 #if defined(image_data_Image)
 #define VINYL_UI_BITMAP_PTR image_data_Image
 #elif defined(vinyl_ui_bitmap)
 #define VINYL_UI_BITMAP_PTR vinyl_ui_bitmap
 #else
-#error "vinyl_ui bitmap symbol not found; export image_data_Image or vinyl_ui_bitmap"
+// Fall back to the common LCD Image Converter name; the symbol is expected
+// to be provided by the user-supplied vinyl_ui.h.
+extern const uint16_t image_data_Image[];
+#define VINYL_UI_BITMAP_PTR image_data_Image
+#endif
 #endif
 
