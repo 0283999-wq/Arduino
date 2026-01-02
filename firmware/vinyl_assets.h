@@ -2,21 +2,10 @@
 
 #include <Arduino.h>
 
-// Provide a minimal tImage definition in case the exported bitmap references it
-// without declaring the type. The field order matches the common LCD Image
-// Converter output and is unused elsewhere.
-#ifndef TIMAGE_SHIM_DEFINED
-typedef struct {
-  const uint16_t *data;
-  uint16_t width;
-  uint16_t height;
-  uint8_t dataSize;
-} tImage;
-#define TIMAGE_SHIM_DEFINED
-#endif
-
-// Pull in the user-supplied vinyl skin. This file should define either
-// `image_data_Image` or `vinyl_ui_bitmap` with 240x240 RGB565 pixels.
+// Pull in the user-supplied vinyl skin. This file should provide the raw
+// RGB565 array (240x240). No compile-time symbol probing is attempted because
+// variables cannot be detected by the preprocessor; we simply alias the
+// expected common names.
 #include "vinyl_ui.h"
 
 #ifndef VINYL_UI_WIDTH
@@ -27,16 +16,17 @@ typedef struct {
 #define VINYL_UI_HEIGHT 240
 #endif
 
+// Default to the standard LCD Image Converter symbol. If a different symbol
+// name is used, define VINYL_UI_BITMAP_PTR before including this header or
+// add a matching extern below.
 #ifndef VINYL_UI_BITMAP_PTR
-#if defined(image_data_Image)
-#define VINYL_UI_BITMAP_PTR image_data_Image
-#elif defined(vinyl_ui_bitmap)
-#define VINYL_UI_BITMAP_PTR vinyl_ui_bitmap
-#else
-// Fall back to the common LCD Image Converter name; the symbol is expected
-// to be provided by the user-supplied vinyl_ui.h.
-extern const uint16_t image_data_Image[];
+extern const uint16_t image_data_Image[] PROGMEM;
 #define VINYL_UI_BITMAP_PTR image_data_Image
 #endif
+
+// Optional alias for headers that export `vinyl_ui_bitmap` instead.
+#ifndef VINYL_UI_BITMAP_PTR
+extern const uint16_t vinyl_ui_bitmap[] PROGMEM;
+#define VINYL_UI_BITMAP_PTR vinyl_ui_bitmap
 #endif
 
